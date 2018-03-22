@@ -1,0 +1,125 @@
+	#mkfs.ubifs -r rootfs -m 2048 -e 126976 -c 3846 -j 8MiB -o ubifs.img
+    #ubinize -o istar_ubifs.img -m 2048 -p 128KiB -s 2048 ubinize.cfg
+		
+	mkfs.ubifs -r ../../rootfs -m 2048 -e 126976 -c 3846 -j 8MiB -o ../../ubifs.img
+	ubinize -o ../../istar_ubifs.img -m 2048 -p 128KiB -s 2048 ../../ubinize.cfg
+-r：制定文件内容的位置 
+    -m：页面大小 
+    -e：逻辑擦除块大小 
+    -p：物理擦除块大小 
+    -c：最大的逻辑擦除块数量
+    对我们这种情况，文件系统最多可以访问卷上的129024*812=100M空间 
+    -s：最小的硬件输入输出页面大小，如：k9f1208为256(上下半页访问)
+
+其中，ubinize.cfg的内容为：
+
+[ubifs]
+    mode=ubi
+    image=ubifs.img
+    vol_id=0
+    vol_size=100MiB 
+    vol_type=dynamic
+    vol_name=ubi0:rootfs
+    vol_flags=autoresize
+	
+	
+	make WITHOUT_XATTR=1
+	
+	CC=powerpc-e300c3-linux-gnu-gcc 
+	./configure --shared --prefix=/opt/freescale/usr/local/gcc-4.1.78-eglibc-2.5.78-1/powerpc-e300c3-linux-gnu/powerpc-e300c3-linux-gnu
+	
+	CC=powerpc-e300c3-linux-gnu-gcc 
+	./configure --host=powerpc-linux --prefix=/opt/freescale/usr/local/gcc-4.1.78-eglibc-2.5.78-1/powerpc-e300c3-linux-gnu/powerpc-e300c3-linux-gnu
+	
+	
+	./configure   --prefix=/opt/freescale/usr/local/gcc-4.1.78-eglibc-2.5.78-1/powerpc-e300c3-linux-gnu/powerpc-e300c3-linux-gnu --host=arm-none-linux-gnueabi  --disable-mount --disable-makeinstall-setuid --disable-makeinstall-chown --disable-use-tty-group --disable-chsh-only-listed --disable-schedutils --disable-wall --disable-kill --disable-pivot_root --disable-switch_root --disable-cramfs --disable-agetty --disable-unshare --disable-fallocate --disable-mountpoint --disable-uuidd --disable-partx --disable-fsck --disable-losetup --disable-mount --disable-libmount --disable-tls  --without-ncurses
+	
+{ ISTAR:
+	mkfs.ubifs -r rootfs_istar -m 2048 -e 126976 -c 3846 -j 8MiB -o istar_ubifs.img
+	ubinize -o istar.ubifs.img -m 2048 -p 128KiB -s 2048 istar_ubinize.cfg
+	
+	[ubifs]
+    mode=ubi
+    image=istar_ubifs.img
+    vol_id=0
+    vol_size=465MiB 
+    vol_type=dynamic
+    vol_name=rootfs
+    vol_flags=autoresize
+
+
+
+}
+
+[nand mtd]
+1，创建一个需要被挂在的目录
+ 
+# mkdir /mnt/system
+ 
+2，载入mtd模块
+ 
+# modprobe mtdblock
+ 
+3，载入ubi模块（前提你的linux环境以支持ubi模块）
+ 
+# modprobe ubi
+4，载入nandsim来模拟nand设备
+ 
+ 
+# modprobe nandsim first_id_byte=0x20 second_id_byte=0xac third_id_byte=0x00 fourth_id_byte=0x15
+ 
+要根据自己机器的情况来选择：
+modprobe nandsim first_id_byte=0x20 second_id_byte=0x33 - 16MiB, 512 bytes page;
+modprobe nandsim first_id_byte=0x20 second_id_byte=0x35 - 32MiB, 512 bytes page;
+modprobe nandsim first_id_byte=0x20 second_id_byte=0x36 - 64MiB, 512 bytes page;
+modprobe nandsim first_id_byte=0x20 second_id_byte=0x78 - 128MiB, 512 bytes page;
+modprobe nandsim first_id_byte=0x20 second_id_byte=0x71 - 256MiB, 512 bytes page;
+modprobe nandsim first_id_byte=0x20 second_id_byte=0xa2 third_id_byte=0x00 fourth_id_byte=0x15 - 64MiB, 2048 bytes page;
+modprobe nandsim first_id_byte=0xec second_id_byte=0xa1 third_id_byte=0x00 fourth_id_byte=0x15 - 128MiB, 2048 bytes page;
+modprobe nandsim first_id_byte=0x20 second_id_byte=0xaa third_id_byte=0x00 fourth_id_byte=0x15 - 256MiB, 2048 bytes page;
+modprobe nandsim first_id_byte=0x20 second_id_byte=0xac third_id_byte=0x00 fourth_id_byte=0x15 - 512MiB, 2048 bytes page;
+modprobe nandsim first_id_byte=0xec second_id_byte=0xd3 third_id_byte=0x51 fourth_id_byte=0x95 - 1GiB, 2048 bytes page;我昨天解包的时候就是在这里搞错了（我的机器需要4096 bytes page），然后再最后mount的时候老是mount不上，记住这步至关重要！ 5，检查加入模块的环境
+modprobe nandsim first_id_byte=0xec second_id_byte=0xd5 third_id_byte=0x51 fourth_id_byte=0xa6  //- 2GiB, 4096 bytes page.
+ 
+# cat /proc/mtd
+dev:    size   erasesize  name
+mtd0: 10000000 00020000 "NAND simulator partition 0"
+ 
+ 
+# ls -la /dev/mtd*
+crw-rw---- 1 root root 90, 0 2013-08-17 20:02 /dev/mtd0
+crw-rw---- 1 root root 90, 1 2013-08-17 20:02 /dev/mtd0ro
+brw-rw---- 1 root disk 31, 0 2013-08-17 20:03 /dev/mtdblock0
+ 
+ 
+6，把system.img直接载到mtd的块设备
+ 
+dd if=/resource/I_Star_V10/ImgBin/istar_ubifs.img of=/dev/mtdblock0 bs=2048
+以上步骤一般都可以顺利进行下去
+ 
+7，在这里 需要安装mtd-utils工具箱（ubuntu下 直接apt-get install mtd-utils），这一步是将ubi模块与已载入了system.img的mtd模块关联
+ 
+# ubiattach /dev/ubi_ctrl -m 0
+在这里 很多Linux环境会不成功，提示
+ 
+ 
+ubiattach: error!: cannot attach mtd0
+           error 22 (Invalid argument)
+此时 可以通过查看dmesg，可以看到
+ 
+UBI error: validate_ec_hdr: bad VID header offset 4096
+预期512开始的header，我的机子是4096
+ 
+我们修改 为
+# ubiattach /dev/ubi_ctrl -m 0 -O 2048
+ 
+ 
+到这里，模块载入成功
+ 
+UBI device number 0, total 2048 LEBs (264241152 bytes, 252.0 MiB), available 0 LEBs (0 bytes), LEB size 129024 bytes (126.0 KiB)
+8，挂载该模块到指定目录就OK
+# mount -t ubifs /dev/ubi0_0 /mnt/system/
+
+
+gcc main.c -lhello -L. -static -o main  
+#gcc main.c libhello.a -L. -o main  静态编译
